@@ -1,1 +1,932 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mississippi River Boat Captain</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            color: #e0d0a0;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #gameContainer {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #gameCanvas {
+            flex: 1;
+            background: #2a3a2a;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border: 2px solid #8b7355;
+            font-size: 14px;
+            z-index: 10;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: none;
+            gap: 10px;
+            z-index: 10;
+        }
+        
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(139,115,85,0.6);
+            border: 2px solid #e0d0a0;
+            color: #e0d0a0;
+            font-size: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        
+        #townMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #3a3020;
+            border: 3px solid #8b7355;
+            padding: 20px;
+            display: none;
+            z-index: 20;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        
+        .menu-title {
+            font-size: 24px;
+            color: #f0e0b0;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 2px 2px #000;
+        }
+        
+        .menu-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #8b7355;
+        }
+        
+        .menu-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #8b7355;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .menu-button:hover {
+            background: #a08060;
+        }
+        
+        .good-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            margin: 3px 0;
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .damage-flash {
+            animation: damage 0.5s;
+        }
+        
+        @keyframes damage {
+            0%, 100% { filter: none; }
+            50% { filter: brightness(2) hue-rotate(180deg); }
+        }
+        
+        #minimap {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 150px;
+            height: 200px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #8b7355;
+            z-index: 10;
+        }
+        
+        .legend {
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .legend-item {
+            margin: 2px 0;
+        }
+        
+        @media (max-width: 768px) {
+            #controls { display: flex; }
+            #ui { font-size: 12px; }
+            .menu-title { font-size: 18px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui">
+            <div>Captain <span id="playerName">Samuel</span></div>
+            <div>Money: $<span id="money">500</span></div>
+            <div>Boat: <span id="boatName">Old Betsy</span></div>
+            <div>Hull: <span id="hull">100</span>%</div>
+            <div>Speed: <span id="speed">0</span> knots</div>
+            <div>Location: <span id="location">New Orleans</span></div>
+            <div class="legend">
+                <div class="legend-item">~ Calm water</div>
+                <div class="legend-item">≈ Rough water</div>
+                <div class="legend-item">→←↑↓ Currents</div>
+                <div class="legend-item">◊ Eddy</div>
+                <div class="legend-item">▪ Logs/Debris</div>
+            </div>
+        </div>
+        
+        <canvas id="minimap"></canvas>
+        
+        <div id="controls">
+            <button class="control-btn" id="upBtn">↑</button>
+            <button class="control-btn" id="leftBtn">←</button>
+            <button class="control-btn" id="rightBtn">→</button>
+            <button class="control-btn" id="downBtn">↓</button>
+        </div>
+        
+        <div id="townMenu">
+            <h2 class="menu-title" id="townName">Welcome to Town</h2>
+            
+            <div class="menu-section">
+                <h3>Trade Goods</h3>
+                <div id="tradeGoods"></div>
+            </div>
+            
+            <div class="menu-section">
+                <h3>Your Cargo</h3>
+                <div id="playerCargo"></div>
+            </div>
+            
+            <div class="menu-section">
+                <h3>Contracts</h3>
+                <div id="contracts"></div>
+            </div>
+            
+            <div class="menu-section">
+                <h3>Shipyard</h3>
+                <button class="menu-button" onclick="game.repairBoat()">Repair Hull ($2/point)</button>
+                <div id="boatUpgrades"></div>
+            </div>
+            
+            <button class="menu-button" onclick="game.leaveTown()">Set Sail!</button>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const TILE_SIZE = 20;
+        const RIVER_WIDTH = 25;
+        const MAP_HEIGHT = 500;
+        const VISIBILITY_RANGE = 30;
+        
+        // River towns (real Mississippi River towns in order)
+        const TOWNS = [
+            { name: "New Orleans", y: 480, goods: ["cotton", "sugar", "coffee"], x: 12 },
+            { name: "Baton Rouge", y: 440, goods: ["lumber", "cotton", "grain"], x: 11 },
+            { name: "Natchez", y: 380, goods: ["cotton", "tobacco", "lumber"], x: 13 },
+            { name: "Vicksburg", y: 340, goods: ["cotton", "grain", "tools"], x: 10 },
+            { name: "Greenville", y: 290, goods: ["cotton", "grain", "livestock"], x: 14 },
+            { name: "Memphis", y: 220, goods: ["cotton", "lumber", "grain"], x: 12 },
+            { name: "New Madrid", y: 150, goods: ["grain", "livestock", "tools"], x: 11 },
+            { name: "Cairo", y: 80, goods: ["grain", "coal", "tools"], x: 13 },
+            { name: "St. Louis", y: 20, goods: ["furs", "tools", "grain"], x: 12 }
+        ];
+        
+        // Goods with base prices
+        const GOODS = {
+            cotton: { basePrice: 50, weight: 10 },
+            sugar: { basePrice: 40, weight: 8 },
+            coffee: { basePrice: 60, weight: 5 },
+            lumber: { basePrice: 30, weight: 15 },
+            grain: { basePrice: 20, weight: 12 },
+            tobacco: { basePrice: 45, weight: 6 },
+            tools: { basePrice: 70, weight: 10 },
+            livestock: { basePrice: 35, weight: 20 },
+            coal: { basePrice: 25, weight: 25 },
+            furs: { basePrice: 80, weight: 3 }
+        };
+        
+        // Water tile types
+        const WATER_TILES = {
+            CALM: { char: '~', color: '#4a5a7a', speed: 1.0 },
+            ROUGH: { char: '≈', color: '#3a4a6a', speed: 0.7 },
+            CURRENT_N: { char: '↑', color: '#5a6a8a', speed: 1.3, force: {x: 0, y: -0.5} },
+            CURRENT_S: { char: '↓', color: '#5a6a8a', speed: 1.3, force: {x: 0, y: 0.5} },
+            CURRENT_E: { char: '→', color: '#5a6a8a', speed: 1.2, force: {x: 0.3, y: 0} },
+            CURRENT_W: { char: '←', color: '#5a6a8a', speed: 1.2, force: {x: -0.3, y: 0} },
+            EDDY: { char: '◊', color: '#4a5a8a', speed: 0.5, force: {x: 0, y: 0} },
+            SHALLOW: { char: '·', color: '#6a5a4a', speed: 0.4 },
+            BANK: { char: '█', color: '#8b7355', speed: 0 }
+        };
+        
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.minimapCanvas = document.getElementById('minimap');
+                this.minimapCtx = this.minimapCanvas.getContext('2d');
+                
+                this.setupCanvas();
+                this.generateRiver();
+                this.initPlayer();
+                this.initEconomy();
+                this.initOtherBoats();
+                
+                this.camera = { x: 0, y: 0 };
+                this.inTown = false;
+                this.currentTown = null;
+                
+                this.keys = {};
+                this.touches = {};
+                this.setupControls();
+                
+                this.lastTime = 0;
+                this.gameLoop();
+            }
+            
+            setupCanvas() {
+                const resize = () => {
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight;
+                    this.minimapCanvas.width = 150;
+                    this.minimapCanvas.height = 200;
+                };
+                resize();
+                window.addEventListener('resize', resize);
+            }
+            
+            generateRiver() {
+                this.riverMap = [];
+                let centerX = RIVER_WIDTH / 2;
+                let riverCurve = 0;
+                
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    const row = [];
+                    
+                    // River meanders
+                    riverCurve += (Math.random() - 0.5) * 0.3;
+                    riverCurve *= 0.9; // Damping
+                    centerX += riverCurve;
+                    centerX = Math.max(5, Math.min(RIVER_WIDTH - 5, centerX));
+                    
+                    for (let x = 0; x < RIVER_WIDTH; x++) {
+                        const distFromCenter = Math.abs(x - centerX);
+                        const tileType = this.getTileType(x, y, distFromCenter, centerX);
+                        row.push(tileType);
+                    }
+                    
+                    this.riverMap.push(row);
+                }
+                
+                // Add obstacles
+                for (let i = 0; i < 200; i++) {
+                    const x = Math.floor(Math.random() * RIVER_WIDTH);
+                    const y = Math.floor(Math.random() * MAP_HEIGHT);
+                    if (this.riverMap[y][x] !== 'BANK') {
+                        this.riverMap[y][x] = 'LOG';
+                    }
+                }
+            }
+            
+            getTileType(x, y, distFromCenter, centerX) {
+                // Banks
+                if (distFromCenter > 8) return 'BANK';
+                
+                // Shallows near banks
+                if (distFromCenter > 6) return 'SHALLOW';
+                
+                // Main channel currents
+                if (distFromCenter < 2) {
+                    if (Math.random() < 0.3) return 'CURRENT_S';
+                }
+                
+                // Eddies and side currents
+                if (distFromCenter > 3 && distFromCenter < 6) {
+                    const rand = Math.random();
+                    if (rand < 0.1) return 'EDDY';
+                    if (rand < 0.2) return x < centerX ? 'CURRENT_W' : 'CURRENT_E';
+                    if (rand < 0.3) return 'ROUGH';
+                }
+                
+                // Random currents
+                if (Math.random() < 0.1) {
+                    const currents = ['CURRENT_N', 'CURRENT_S', 'CURRENT_E', 'CURRENT_W'];
+                    return currents[Math.floor(Math.random() * currents.length)];
+                }
+                
+                return 'CALM';
+            }
+            
+            initPlayer() {
+                this.player = {
+                    x: RIVER_WIDTH / 2,
+                    y: MAP_HEIGHT - 20,
+                    vx: 0,
+                    vy: 0,
+                    angle: -Math.PI / 2, // Facing north
+                    hull: 100,
+                    maxHull: 100,
+                    money: 500,
+                    name: "Samuel",
+                    boat: {
+                        name: "Old Betsy",
+                        speed: 0.15,
+                        turning: 0.05,
+                        cargo: 50,
+                        type: "steamboat"
+                    },
+                    cargo: [],
+                    contracts: []
+                };
+            }
+            
+            initEconomy() {
+                this.townEconomies = {};
+                TOWNS.forEach(town => {
+                    this.townEconomies[town.name] = {
+                        prices: {},
+                        supply: {},
+                        demand: {}
+                    };
+                    
+                    // Set initial prices based on local goods
+                    Object.keys(GOODS).forEach(good => {
+                        const isLocal = town.goods.includes(good);
+                        const basePrice = GOODS[good].basePrice;
+                        const modifier = isLocal ? 0.7 + Math.random() * 0.3 : 1.2 + Math.random() * 0.4;
+                        this.townEconomies[town.name].prices[good] = Math.floor(basePrice * modifier);
+                        this.townEconomies[town.name].supply[good] = isLocal ? 50 + Math.floor(Math.random() * 50) : Math.floor(Math.random() * 20);
+                        this.townEconomies[town.name].demand[good] = !isLocal ? 20 + Math.floor(Math.random() * 30) : Math.floor(Math.random() * 10);
+                    });
+                });
+            }
+            
+            initOtherBoats() {
+                this.otherBoats = [];
+                for (let i = 0; i < 15; i++) {
+                    const town = TOWNS[Math.floor(Math.random() * TOWNS.length)];
+                    this.otherBoats.push({
+                        x: town.x + (Math.random() - 0.5) * 4,
+                        y: town.y + (Math.random() - 0.5) * 10,
+                        vx: 0,
+                        vy: (Math.random() - 0.5) * 0.5,
+                        angle: Math.random() * Math.PI * 2,
+                        type: Math.random() < 0.7 ? 'small' : 'large',
+                        color: `hsl(${Math.random() * 60 + 20}, 40%, 50%)`,
+                        targetTown: Math.floor(Math.random() * TOWNS.length),
+                        cargo: Math.floor(Math.random() * 100)
+                    });
+                }
+            }
+            
+            setupControls() {
+                // Keyboard controls
+                window.addEventListener('keydown', e => this.keys[e.key] = true);
+                window.addEventListener('keyup', e => this.keys[e.key] = false);
+                
+                // Touch controls
+                const touchButtons = {
+                    upBtn: 'ArrowUp',
+                    downBtn: 'ArrowDown',
+                    leftBtn: 'ArrowLeft',
+                    rightBtn: 'ArrowRight'
+                };
+                
+                Object.entries(touchButtons).forEach(([id, key]) => {
+                    const btn = document.getElementById(id);
+                    btn.addEventListener('touchstart', e => {
+                        e.preventDefault();
+                        this.keys[key] = true;
+                    });
+                    btn.addEventListener('touchend', e => {
+                        e.preventDefault();
+                        this.keys[key] = false;
+                    });
+                });
+            }
+            
+            updatePlayer(deltaTime) {
+                if (this.inTown) return;
+                
+                const p = this.player;
+                
+                // Steering
+                if (this.keys['ArrowLeft'] || this.keys['a']) {
+                    p.angle -= p.boat.turning;
+                }
+                if (this.keys['ArrowRight'] || this.keys['d']) {
+                    p.angle += p.boat.turning;
+                }
+                
+                // Throttle
+                if (this.keys['ArrowUp'] || this.keys['w']) {
+                    const thrust = p.boat.speed;
+                    p.vx += Math.cos(p.angle) * thrust;
+                    p.vy += Math.sin(p.angle) * thrust;
+                }
+                if (this.keys['ArrowDown'] || this.keys['s']) {
+                    const thrust = p.boat.speed * 0.5; // Reverse is slower
+                    p.vx -= Math.cos(p.angle) * thrust;
+                    p.vy -= Math.sin(p.angle) * thrust;
+                }
+                
+                // Get current tile
+                const tileX = Math.floor(p.x);
+                const tileY = Math.floor(p.y);
+                
+                if (tileY >= 0 && tileY < MAP_HEIGHT && tileX >= 0 && tileX < RIVER_WIDTH) {
+                    const tileType = this.riverMap[tileY][tileX];
+                    const tile = WATER_TILES[tileType] || WATER_TILES.CALM;
+                    
+                    // Apply current forces
+                    if (tile.force) {
+                        p.vx += tile.force.x * 0.02;
+                        p.vy += tile.force.y * 0.02;
+                    }
+                    
+                    // Apply drag based on tile
+                    const drag = 0.95 * tile.speed;
+                    p.vx *= drag;
+                    p.vy *= drag;
+                    
+                    // Check for damage
+                    if (tileType === 'BANK' || tileType === 'LOG') {
+                        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                        if (speed > 0.1) {
+                            p.hull -= speed * 5;
+                            this.canvas.classList.add('damage-flash');
+                            setTimeout(() => this.canvas.classList.remove('damage-flash'), 500);
+                            
+                            // Bounce off
+                            p.vx *= -0.5;
+                            p.vy *= -0.5;
+                        }
+                    }
+                    
+                    if (tileType === 'SHALLOW' && Math.random() < 0.02) {
+                        p.hull -= 0.5;
+                    }
+                }
+                
+                // Update position
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // Keep in bounds
+                p.x = Math.max(1, Math.min(RIVER_WIDTH - 1, p.x));
+                p.y = Math.max(0, Math.min(MAP_HEIGHT - 1, p.y));
+                
+                // Check for towns
+                const nearTown = TOWNS.find(town => 
+                    Math.abs(town.x - p.x) < 2 && Math.abs(town.y - p.y) < 3
+                );
+                
+                if (nearTown && Math.abs(p.vx) < 0.1 && Math.abs(p.vy) < 0.1) {
+                    this.enterTown(nearTown);
+                }
+                
+                // Update UI
+                document.getElementById('hull').textContent = Math.max(0, Math.floor(p.hull));
+                document.getElementById('speed').textContent = (Math.sqrt(p.vx * p.vx + p.vy * p.vy) * 10).toFixed(1);
+                
+                // Find nearest town for location display
+                let nearestTown = TOWNS[0];
+                let nearestDist = Math.abs(nearestTown.y - p.y);
+                TOWNS.forEach(town => {
+                    const dist = Math.abs(town.y - p.y);
+                    if (dist < nearestDist) {
+                        nearestTown = town;
+                        nearestDist = dist;
+                    }
+                });
+                document.getElementById('location').textContent = `Near ${nearestTown.name}`;
+            }
+            
+            updateOtherBoats(deltaTime) {
+                this.otherBoats.forEach(boat => {
+                    // Simple AI - navigate towards target town
+                    const targetTown = TOWNS[boat.targetTown];
+                    const dx = targetTown.x - boat.x;
+                    const dy = targetTown.y - boat.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 2) {
+                        // Reached town, pick new destination
+                        boat.targetTown = Math.floor(Math.random() * TOWNS.length);
+                        boat.cargo = Math.floor(Math.random() * 100);
+                    } else {
+                        // Move towards target
+                        boat.angle = Math.atan2(dy, dx);
+                        const speed = boat.type === 'small' ? 0.08 : 0.05;
+                        boat.vx = Math.cos(boat.angle) * speed;
+                        boat.vy = Math.sin(boat.angle) * speed;
+                    }
+                    
+                    // Apply current (simplified)
+                    const tileX = Math.floor(boat.x);
+                    const tileY = Math.floor(boat.y);
+                    if (tileY >= 0 && tileY < MAP_HEIGHT && tileX >= 0 && tileX < RIVER_WIDTH) {
+                        const tileType = this.riverMap[tileY][tileX];
+                        if (tileType === 'CURRENT_S') boat.vy += 0.01;
+                        if (tileType === 'CURRENT_N') boat.vy -= 0.01;
+                    }
+                    
+                    boat.x += boat.vx;
+                    boat.y += boat.vy;
+                    
+                    // Keep in bounds
+                    boat.x = Math.max(2, Math.min(RIVER_WIDTH - 2, boat.x));
+                });
+            }
+            
+            enterTown(town) {
+                this.inTown = true;
+                this.currentTown = town;
+                this.player.vx = 0;
+                this.player.vy = 0;
+                
+                document.getElementById('townMenu').style.display = 'block';
+                document.getElementById('townName').textContent = `Welcome to ${town.name}`;
+                
+                this.updateTownMenu();
+            }
+            
+            updateTownMenu() {
+                const economy = this.townEconomies[this.currentTown.name];
+                
+                // Trade goods
+                const tradeDiv = document.getElementById('tradeGoods');
+                tradeDiv.innerHTML = '';
+                
+                Object.keys(GOODS).forEach(good => {
+                    const div = document.createElement('div');
+                    div.className = 'good-item';
+                    div.innerHTML = `
+                        <span>${good} ($${economy.prices[good]}) [${economy.supply[good]}]</span>
+                        <span>
+                            <button onclick="game.buyGood('${good}')">Buy</button>
+                            <button onclick="game.sellGood('${good}')">Sell</button>
+                        </span>
+                    `;
+                    tradeDiv.appendChild(div);
+                });
+                
+                // Player cargo
+                const cargoDiv = document.getElementById('playerCargo');
+                cargoDiv.innerHTML = '';
+                
+                const cargoWeight = this.player.cargo.reduce((sum, item) => sum + GOODS[item.type].weight * item.quantity, 0);
+                cargoDiv.innerHTML = `<div>Cargo: ${cargoWeight}/${this.player.boat.cargo} tons</div>`;
+                
+                this.player.cargo.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'good-item';
+                    div.innerHTML = `<span>${item.type} x${item.quantity} (bought at $${item.boughtPrice})</span>`;
+                    cargoDiv.appendChild(div);
+                });
+                
+                // Contracts
+                const contractsDiv = document.getElementById('contracts');
+                contractsDiv.innerHTML = '';
+                
+                // Generate some contracts if none exist
+                if (this.player.contracts.length === 0) {
+                    for (let i = 0; i < 3; i++) {
+                        const destTown = TOWNS[Math.floor(Math.random() * TOWNS.length)];
+                        if (destTown.name !== this.currentTown.name) {
+                            const good = Object.keys(GOODS)[Math.floor(Math.random() * Object.keys(GOODS).length)];
+                            const quantity = 5 + Math.floor(Math.random() * 10);
+                            const payment = GOODS[good].basePrice * quantity * (1.5 + Math.random());
+                            
+                            this.player.contracts.push({
+                                type: 'delivery',
+                                good: good,
+                                quantity: quantity,
+                                destination: destTown.name,
+                                payment: Math.floor(payment),
+                                id: Date.now() + i
+                            });
+                        }
+                    }
+                }
+                
+                this.player.contracts.forEach(contract => {
+                    const div = document.createElement('div');
+                    div.className = 'good-item';
+                    div.innerHTML = `
+                        <span>Deliver ${contract.quantity} ${contract.good} to ${contract.destination} for $${contract.payment}</span>
+                        <button onclick="game.acceptContract(${contract.id})">Accept</button>
+                    `;
+                    contractsDiv.appendChild(div);
+                });
+                
+                document.getElementById('money').textContent = this.player.money;
+            }
+            
+            buyGood(type) {
+                const economy = this.townEconomies[this.currentTown.name];
+                const price = economy.prices[type];
+                const weight = GOODS[type].weight;
+                
+                const currentWeight = this.player.cargo.reduce((sum, item) => 
+                    sum + GOODS[item.type].weight * item.quantity, 0);
+                
+                if (currentWeight + weight > this.player.boat.cargo) {
+                    alert("Not enough cargo space!");
+                    return;
+                }
+                
+                if (this.player.money < price) {
+                    alert("Not enough money!");
+                    return;
+                }
+                
+                if (economy.supply[type] <= 0) {
+                    alert("None available!");
+                    return;
+                }
+                
+                // Execute purchase
+                this.player.money -= price;
+                economy.supply[type]--;
+                economy.prices[type] = Math.floor(economy.prices[type] * 1.02); // Price goes up
+                
+                // Add to cargo
+                const existing = this.player.cargo.find(item => item.type === type);
+                if (existing) {
+                    existing.quantity++;
+                } else {
+                    this.player.cargo.push({ type: type, quantity: 1, boughtPrice: price });
+                }
+                
+                this.updateTownMenu();
+            }
+            
+            sellGood(type) {
+                const economy = this.townEconomies[this.currentTown.name];
+                const price = economy.prices[type];
+                
+                const cargoItem = this.player.cargo.find(item => item.type === type);
+                if (!cargoItem) {
+                    alert("You don't have any to sell!");
+                    return;
+                }
+                
+                // Execute sale
+                this.player.money += price;
+                economy.supply[type]++;
+                economy.prices[type] = Math.floor(economy.prices[type] * 0.98); // Price goes down
+                
+                cargoItem.quantity--;
+                if (cargoItem.quantity <= 0) {
+                    this.player.cargo = this.player.cargo.filter(item => item.type !== type);
+                }
+                
+                this.updateTownMenu();
+            }
+            
+            acceptContract(id) {
+                // For now just acknowledge - full contract system would track these
+                alert("Contract accepted! Deliver the goods to complete it.");
+                this.player.contracts = this.player.contracts.filter(c => c.id !== id);
+                this.updateTownMenu();
+            }
+            
+            repairBoat() {
+                const damage = this.player.maxHull - this.player.hull;
+                const cost = Math.floor(damage * 2);
+                
+                if (cost <= 0) {
+                    alert("Your boat doesn't need repairs!");
+                    return;
+                }
+                
+                if (this.player.money < cost) {
+                    alert(`Repairs would cost $${cost}, but you only have $${this.player.money}`);
+                    return;
+                }
+                
+                this.player.money -= cost;
+                this.player.hull = this.player.maxHull;
+                alert("Boat repaired!");
+                this.updateTownMenu();
+            }
+            
+            leaveTown() {
+                this.inTown = false;
+                this.currentTown = null;
+                document.getElementById('townMenu').style.display = 'none';
+            }
+            
+            render() {
+                // Clear canvas
+                this.ctx.fillStyle = '#1a2a1a';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Update camera to follow player
+                this.camera.x = this.player.x * TILE_SIZE - this.canvas.width / 2;
+                this.camera.y = this.player.y * TILE_SIZE - this.canvas.height / 2;
+                
+                // Draw river tiles
+                const startY = Math.floor(this.camera.y / TILE_SIZE);
+                const endY = Math.ceil((this.camera.y + this.canvas.height) / TILE_SIZE);
+                const startX = Math.floor(this.camera.x / TILE_SIZE);
+                const endX = Math.ceil((this.camera.x + this.canvas.width) / TILE_SIZE);
+                
+                for (let y = Math.max(0, startY); y < Math.min(MAP_HEIGHT, endY); y++) {
+                    for (let x = Math.max(0, startX); x < Math.min(RIVER_WIDTH, endX); x++) {
+                        const tileType = this.riverMap[y][x];
+                        const tile = WATER_TILES[tileType] || WATER_TILES.CALM;
+                        
+                        const screenX = x * TILE_SIZE - this.camera.x;
+                        const screenY = y * TILE_SIZE - this.camera.y;
+                        
+                        // Draw water background
+                        this.ctx.fillStyle = tile.color;
+                        this.ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                        
+                        // Draw water character
+                        if (tileType === 'LOG') {
+                            this.ctx.fillStyle = '#4a3a2a';
+                            this.ctx.fillRect(screenX + 4, screenY + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                        } else {
+                            this.ctx.fillStyle = '#a0b0d0';
+                            this.ctx.font = '16px monospace';
+                            this.ctx.textAlign = 'center';
+                            this.ctx.textBaseline = 'middle';
+                            this.ctx.fillText(tile.char, screenX + TILE_SIZE/2, screenY + TILE_SIZE/2);
+                        }
+                    }
+                }
+                
+                // Draw towns
+                TOWNS.forEach(town => {
+                    const screenX = town.x * TILE_SIZE - this.camera.x;
+                    const screenY = town.y * TILE_SIZE - this.camera.y;
+                    
+                    // Town dock
+                    this.ctx.fillStyle = '#8b7355';
+                    this.ctx.fillRect(screenX - 20, screenY - 20, 40, 40);
+                    
+                    // Town name
+                    this.ctx.fillStyle = '#f0e0b0';
+                    this.ctx.font = 'bold 14px monospace';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(town.name, screenX, screenY - 30);
+                });
+                
+                // Draw other boats
+                this.otherBoats.forEach(boat => {
+                    const screenX = boat.x * TILE_SIZE - this.camera.x;
+                    const screenY = boat.y * TILE_SIZE - this.camera.y;
+                    
+                    this.ctx.save();
+                    this.ctx.translate(screenX, screenY);
+                    this.ctx.rotate(boat.angle);
+                    
+                    // Boat body
+                    this.ctx.fillStyle = boat.color;
+                    const size = boat.type === 'small' ? 15 : 25;
+                    this.ctx.fillRect(-size/2, -8, size, 16);
+                    
+                    // Steam puffs
+                    this.ctx.fillStyle = 'rgba(200,200,200,0.3)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(-size/2 - 5, 0, 4, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    this.ctx.restore();
+                });
+                
+                // Draw player boat
+                const screenX = this.player.x * TILE_SIZE - this.camera.x;
+                const screenY = this.player.y * TILE_SIZE - this.camera.y;
+                
+                this.ctx.save();
+                this.ctx.translate(screenX, screenY);
+                this.ctx.rotate(this.player.angle);
+                
+                // Boat hull
+                this.ctx.fillStyle = '#d4a574';
+                this.ctx.fillRect(-20, -10, 40, 20);
+                
+                // Pilot house
+                this.ctx.fillStyle = '#8b6f47';
+                this.ctx.fillRect(-5, -6, 10, 12);
+                
+                // Steam stack
+                this.ctx.fillStyle = '#4a4a4a';
+                this.ctx.fillRect(-15, -3, 6, 6);
+                
+                // Steam puffs
+                const time = Date.now() / 1000;
+                for (let i = 0; i < 3; i++) {
+                    this.ctx.fillStyle = `rgba(200,200,200,${0.3 - i * 0.1})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(-20 - i * 8, Math.sin(time + i) * 3, 5 - i, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                this.ctx.restore();
+                
+                // Draw minimap
+                this.renderMinimap();
+            }
+            
+            renderMinimap() {
+                const scale = 150 / RIVER_WIDTH;
+                const heightScale = 200 / MAP_HEIGHT;
+                
+                // Clear minimap
+                this.minimapCtx.fillStyle = '#1a1a1a';
+                this.minimapCtx.fillRect(0, 0, 150, 200);
+                
+                // Draw river (simplified)
+                for (let y = 0; y < MAP_HEIGHT; y += 5) {
+                    for (let x = 0; x < RIVER_WIDTH; x++) {
+                        const tileType = this.riverMap[y][x];
+                        if (tileType !== 'BANK') {
+                            this.minimapCtx.fillStyle = '#4a5a7a';
+                            this.minimapCtx.fillRect(x * scale, y * heightScale, scale, heightScale * 5);
+                        }
+                    }
+                }
+                
+                // Draw towns
+                this.minimapCtx.fillStyle = '#f0e0b0';
+                TOWNS.forEach(town => {
+                    this.minimapCtx.fillRect(town.x * scale - 2, town.y * heightScale - 2, 4, 4);
+                });
+                
+                // Draw player
+                this.minimapCtx.fillStyle = '#ff0000';
+                this.minimapCtx.fillRect(this.player.x * scale - 2, this.player.y * heightScale - 2, 4, 4);
+                
+                // Draw viewport
+                this.minimapCtx.strokeStyle = '#8b7355';
+                this.minimapCtx.strokeRect(
+                    this.camera.x / TILE_SIZE * scale,
+                    this.camera.y / TILE_SIZE * heightScale,
+                    this.canvas.width / TILE_SIZE * scale,
+                    this.canvas.height / TILE_SIZE * heightScale
+                );
+            }
+            
+            gameLoop(currentTime) {
+                const deltaTime = currentTime - this.lastTime;
+                this.lastTime = currentTime;
+                
+                this.updatePlayer(deltaTime);
+                this.updateOtherBoats(deltaTime);
+                this.render();
+                
+                requestAnimationFrame(time => this.gameLoop(time));
+            }
+        }
+        
+        // Start game
+        const game = new Game();
+    </script>
+</body>
+</html>
